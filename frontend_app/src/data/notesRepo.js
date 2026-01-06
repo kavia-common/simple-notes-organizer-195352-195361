@@ -70,37 +70,74 @@ function normalizeNote(note) {
   };
 }
 
-// PUBLIC_INTERFACE
+/**
+ * For offline-first UX: UI can optionally show a non-blocking toast when we
+ * fall back from API mode to localStorage due to a network/API failure.
+ */
+function makeFallbackMeta(reason) {
+  return {
+    usedFallback: true,
+    fallbackReason: reason || "API unavailable; using local storage.",
+  };
+}
+
+/**
+ * PUBLIC_INTERFACE
+ */
 export function createNotesRepo() {
   /**
    * Repository abstraction. Defaults to localStorage for offline-first.
-   * If REACT_APP_API_BASE or REACT_APP_BACKEND_URL is set, API mode can be enabled.
+   *
+   * API mode:
+   * - Enabled only when REACT_APP_API_BASE or REACT_APP_BACKEND_URL is a non-empty string.
+   * - Even in API mode, all operations gracefully fall back to localStorage on fetch/network failures.
+   *
+   * Return shape:
+   * - Standard calls return the expected data types (array/note/boolean)
+   * - Additionally, the repo exposes `listWithMeta()` which returns { data, meta } for UI messaging.
    */
   const apiEnabled = isApiEnabled();
   const api = createApiClient();
 
+  // If someone sets env vars but `fetch` is not available for some reason, treat as offline.
+  const canAttemptApi = Boolean(apiEnabled && api.baseUrl && typeof fetch === "function");
+
   async function list() {
-    if (apiEnabled) {
-      // Placeholder for future integration; fallback to local if API fails.
+    // Keep list() backward-compatible: just return data (no metadata).
+    const { data } = await listWithMeta();
+    return data;
+  }
+
+  async function listWithMeta() {
+    if (canAttemptApi) {
       try {
         const data = await api.get("/notes");
-        return sortNotes((data || []).map(normalizeNote));
-      } catch {
-        return sortNotes(loadAllLocal().map(normalizeNote));
+        return { data: sortNotes((data || []).map(normalizeNote)), meta: { usedFallback: false } };
+      } catch (e) {
+        return {
+          data: sortNotes(loadAllLocal().map(normalizeNote)),
+          meta: makeFallbackMeta(e?.message),
+        };
       }
     }
-    return sortNotes(loadAllLocal().map(normalizeNote));
+    return { data: sortNotes(loadAllLocal().map(normalizeNote)), meta: { usedFallback: false } };
   }
 
   async function create({ title, body }) {
-    if (apiEnabled) {
+    if (canAttemptApi) {
       try {
         const created = await api.post("/notes", { title, body });
-        return normalizeNote(created);
-      } catch {
-        // fallback local
+        return { data: normalizeNote(created), meta: { usedFallback: false } };
+      } catch (e) {
+        // fall back local
+        const local = await createLocal({ title, body });
+        return { data: local, meta: makeFallbackMeta(e?.message) };
       }
     }
+    return { data: await createLocal({ title, body }), meta: { usedFallback: false } };
+  }
+
+  async function createLocal({ title, body }) {
     const notes = loadAllLocal();
     const t = nowIso();
     const note = {
@@ -117,14 +154,19 @@ export function createNotesRepo() {
   }
 
   async function update(id, patch) {
-    if (apiEnabled) {
+    if (canAttemptApi) {
       try {
         const updated = await api.put(`/notes/${encodeURIComponent(id)}`, patch);
-        return normalizeNote(updated);
-      } catch {
-        // fallback local
+        return { data: normalizeNote(updated), meta: { usedFallback: false } };
+      } catch (e) {
+        const local = await updateLocal(id, patch);
+        return { data: local, meta: makeFallbackMeta(e?.message) };
       }
     }
+    return { data: await updateLocal(id, patch), meta: { usedFallback: false } };
+  }
+
+  async function updateLocal(id, patch) {
     const notes = loadAllLocal();
     const idx = notes.findIndex((n) => n.id === id);
     if (idx < 0) throw new Error("Note not found.");
@@ -140,14 +182,20 @@ export function createNotesRepo() {
   }
 
   async function remove(id) {
-    if (apiEnabled) {
+    if (canAttemptApi) {
       try {
         await api.del(`/notes/${encodeURIComponent(id)}`);
-        return true;
-      } catch {
-        // fallback local
+        return { data: true, meta: { usedFallback: false } };
+      } catch (e) {
+        await removeLocal(id);
+        return { data: true, meta: makeFallbackMeta(e?.message) };
       }
     }
+    await removeLocal(id);
+    return { data: true, meta: { usedFallback: false } };
+  }
+
+  async function removeLocal(id) {
     const notes = loadAllLocal();
     const next = notes.filter((n) => n.id !== id);
     saveAllLocal(next);
@@ -155,11 +203,42 @@ export function createNotesRepo() {
   }
 
   async function toggleFavorite(id) {
-    const notes = await list();
-    const note = notes.find((n) => n.id === id);
+    // Use listWithMeta so UI can show a fallback toast if API is down.
+    const listed = await listWithMeta();
+    const note = listed.data.find((n) => n.id === id);
     if (!note) throw new Error("Note not found.");
-    return update(id, { favorite: !note.favorite });
+
+    const updated = await update(id, { favorite: !note.favorite });
+    // If either step used fallback, propagate that to UI.
+    const usedFallback = Boolean(listed.meta?.usedFallback || updated.meta?.usedFallback);
+    return {
+      data: updated.data,
+      meta: usedFallback ? makeFallbackMeta(updated.meta?.fallbackReason || listed.meta?.fallbackReason) : { usedFallback: false },
+    };
   }
 
-  return { list, create, update, remove, toggleFavorite };
+  /**
+   * Backward-compatible API (existing callers):
+   * - list() returns Note[]
+   * - create/update/remove/toggleFavorite return Note/boolean
+   *
+   * New optional API for better UX:
+   * - listWithMeta(), createWithMeta(), updateWithMeta(), removeWithMeta(), toggleFavoriteWithMeta()
+   */
+  return {
+    list,
+    listWithMeta,
+
+    // Existing names: return only data.
+    create: async (payload) => (await create(payload)).data,
+    update: async (id, patch) => (await update(id, patch)).data,
+    remove: async (id) => (await remove(id)).data,
+    toggleFavorite: async (id) => (await toggleFavorite(id)).data,
+
+    // Meta-enabled names for UI messaging.
+    createWithMeta: create,
+    updateWithMeta: update,
+    removeWithMeta: remove,
+    toggleFavoriteWithMeta: toggleFavorite,
+  };
 }

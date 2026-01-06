@@ -3,10 +3,10 @@ import styles from "./SearchBar.module.css";
 import { Input } from "./ui/Input";
 
 // PUBLIC_INTERFACE
-export function SearchBar({ value, onChange }) {
+export function SearchBar({ value, onChange, disabled = false }) {
   /** Controlled search input for filtering notes. */
   return (
-    <div className={styles.container}>
+    <div className={styles.container} role="search" aria-label="Search notes">
       <div className={styles.icon} aria-hidden="true">
         ⌕
       </div>
@@ -16,6 +16,7 @@ export function SearchBar({ value, onChange }) {
         placeholder="Search notes…"
         aria-label="Search notes"
         className={styles.input}
+        disabled={disabled}
       />
     </div>
   );

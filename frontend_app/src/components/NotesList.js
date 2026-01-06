@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import styles from "./NotesList.module.css";
 
+function optionId(noteId) {
+  return `note-option-${noteId}`;
+}
+
 // PUBLIC_INTERFACE
 export function NotesList({ notes, selectedId, onSelect, onToggleFavorite, onDelete }) {
   /** Scrollable notes list with keyboard navigation. */
@@ -41,12 +45,14 @@ export function NotesList({ notes, selectedId, onSelect, onToggleFavorite, onDel
         ref={listRef}
         role="listbox"
         aria-label="Notes list"
+        aria-activedescendant={selectedId ? optionId(selectedId) : undefined}
         tabIndex={0}
         onKeyDown={onKeyDown}
       >
         {notes.map((n) => (
           <div
             key={n.id}
+            id={optionId(n.id)}
             data-note-id={n.id}
             className={[styles.item, n.id === selectedId ? styles.active : ""].join(" ")}
             role="option"
@@ -56,7 +62,7 @@ export function NotesList({ notes, selectedId, onSelect, onToggleFavorite, onDel
           >
             <div className={styles.itemHeader}>
               <div className={styles.itemTitle}>{n.title}</div>
-              <div className={styles.itemActions}>
+              <div className={styles.itemActions} role="group" aria-label="Note actions">
                 <button
                   className={[styles.iconBtn, n.favorite ? styles.starActive : ""].join(" ")}
                   onClick={(e) => {
@@ -65,6 +71,7 @@ export function NotesList({ notes, selectedId, onSelect, onToggleFavorite, onDel
                   }}
                   aria-label={n.favorite ? "Unfavorite note" : "Favorite note"}
                   title={n.favorite ? "Unfavorite" : "Favorite"}
+                  type="button"
                 >
                   ★
                 </button>
@@ -76,15 +83,14 @@ export function NotesList({ notes, selectedId, onSelect, onToggleFavorite, onDel
                   }}
                   aria-label="Delete note"
                   title="Delete"
+                  type="button"
                 >
                   🗑
                 </button>
               </div>
             </div>
             <div className={styles.snippet}>{n.snippet || "No content yet…"}</div>
-            <div className={styles.meta}>
-              Updated {new Date(n.updatedAt).toLocaleString()}
-            </div>
+            <div className={styles.meta}>Updated {new Date(n.updatedAt).toLocaleString()}</div>
           </div>
         ))}
       </div>

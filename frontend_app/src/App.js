@@ -10,6 +10,7 @@ import { SearchBar } from "./components/SearchBar";
 import { NotesList } from "./components/NotesList";
 import { NoteEditor } from "./components/NoteEditor";
 import { EmptyState } from "./components/EmptyState";
+import { LoadingState } from "./components/LoadingState";
 import { Toasts } from "./components/Toasts";
 import { useToasts } from "./hooks/useToasts";
 
@@ -21,6 +22,10 @@ function includesQuery(note, query) {
   return (note.title || "").toLowerCase().includes(q) || (note.body || "").toLowerCase().includes(q);
 }
 
+function shouldShowFallbackToast(meta) {
+  return Boolean(meta && meta.usedFallback);
+}
+
 // PUBLIC_INTERFACE
 function App() {
   /** Single-page notes application: sidebar + list + editor, offline-first. */
@@ -30,10 +35,16 @@ function App() {
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState(null); // {id,title,body,...} for editor
   const [isNewDraft, setIsNewDraft] = useState(false);
+
   const [busy, setBusy] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [initialError, setInitialError] = useState("");
 
   const { toasts, pushToast, removeToast } = useToasts();
   const firstLoadRef = useRef(true);
+
+  // Focus management
+  const editorTitleFocusRef = useRef(null);
 
   const apiEnabled = isApiEnabled();
 
@@ -41,20 +52,45 @@ function App() {
     applyThemeToDocument(oceanProfessionalTheme);
   }, []);
 
-  async function refresh(selectId) {
-    const list = await repo.list();
-    setNotes(list);
+  function maybeToastFallback(meta) {
+    if (!shouldShowFallbackToast(meta)) return;
+    pushToast({
+      kind: "info",
+      title: "Offline fallback",
+      message: "API unavailable; continuing with local storage.",
+      timeoutMs: 2600,
+    });
+  }
 
-    const nextSelectedId = selectId || selectedId || (list[0] ? list[0].id : "");
+  async function refresh(selectId) {
+    // Use meta-enabled list to provide graceful messaging when API falls back.
+    const { data, meta } = await repo.listWithMeta();
+    maybeToastFallback(meta);
+
+    setNotes(data);
+
+    const nextSelectedId = selectId || selectedId || (data[0] ? data[0].id : "");
     setSelectedId(nextSelectedId);
 
-    const nextSelected = list.find((n) => n.id === nextSelectedId) || null;
+    const nextSelected = data.find((n) => n.id === nextSelectedId) || null;
     if (!isNewDraft) setDraft(nextSelected);
   }
 
   useEffect(() => {
     // initial load
-    refresh("").catch((e) => pushToast({ kind: "error", title: "Load failed", message: e.message }));
+    (async () => {
+      setInitialLoading(true);
+      setInitialError("");
+      try {
+        await refresh("");
+      } catch (e) {
+        const msg = e?.message || "Unknown error";
+        setInitialError(msg);
+        pushToast({ kind: "error", title: "Load failed", message: msg });
+      } finally {
+        setInitialLoading(false);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -88,11 +124,16 @@ function App() {
     return !draft.title || !draft.title.trim();
   }, [draft, busy]);
 
-  async function handleSelect(id) {
+  async function handleSelect(id, { focusEditor = true } = {}) {
     setSelectedId(id);
     setIsNewDraft(false);
     const selected = notes.find((n) => n.id === id) || null;
     setDraft(selected);
+
+    // Focus the editor's Title field so keyboard users land where editing happens.
+    if (focusEditor) {
+      window.setTimeout(() => editorTitleFocusRef.current?.focus?.(), 0);
+    }
   }
 
   async function handleNewNote() {
@@ -108,6 +149,9 @@ function App() {
       updatedAt: t,
       snippet: "",
     });
+
+    // Focus the title field when creating a note.
+    window.setTimeout(() => editorTitleFocusRef.current?.focus?.(), 0);
   }
 
   async function handleSave() {
@@ -121,13 +165,17 @@ function App() {
     setBusy(true);
     try {
       if (isNewDraft) {
-        const created = await repo.create({ title, body: draft.body || "" });
+        const { data: created, meta } = await repo.createWithMeta({ title, body: draft.body || "" });
+        maybeToastFallback(meta);
+
         setIsNewDraft(false);
         setDraft(created);
         await refresh(created.id);
         pushToast({ kind: "success", title: "Note created", message: "Your note was saved." });
       } else {
-        await repo.update(draft.id, { title, body: draft.body || "" });
+        const { meta } = await repo.updateWithMeta(draft.id, { title, body: draft.body || "" });
+        maybeToastFallback(meta);
+
         await refresh(draft.id);
         pushToast({ kind: "success", title: "Saved", message: "Changes saved." });
       }
@@ -145,10 +193,17 @@ function App() {
 
     setBusy(true);
     try {
-      await repo.remove(id);
+      const { meta } = await repo.removeWithMeta(id);
+      maybeToastFallback(meta);
+
       const nextId = notes.filter((n) => n.id !== id)[0]?.id || "";
       await refresh(nextId);
       pushToast({ kind: "success", title: "Deleted", message: "Note deleted." });
+
+      // Keep keyboard flow: if something is still selected, focus editor; otherwise focus list.
+      window.setTimeout(() => {
+        if (nextId) editorTitleFocusRef.current?.focus?.();
+      }, 0);
     } catch (e) {
       pushToast({ kind: "error", title: "Delete failed", message: e.message });
     } finally {
@@ -158,7 +213,9 @@ function App() {
 
   async function handleToggleFavorite(id) {
     try {
-      const updated = await repo.toggleFavorite(id);
+      const { data: updated, meta } = await repo.toggleFavoriteWithMeta(id);
+      maybeToastFallback(meta);
+
       await refresh(updated.id);
       pushToast({
         kind: "success",
@@ -176,7 +233,7 @@ function App() {
   }
 
   useEffect(() => {
-    // If search results change and nothing is selected, select first result for smoother UX.
+    // If notes load and nothing is selected, select the first note for smoother UX.
     if (!firstLoadRef.current) return;
     if (notes.length > 0 && !selectedId) {
       setSelectedId(notes[0].id);
@@ -184,7 +241,113 @@ function App() {
     firstLoadRef.current = false;
   }, [notes, selectedId]);
 
+  // Empty states
   const showEmptyList = visibleNotes.length === 0;
+
+  const listPanel = (() => {
+    if (initialLoading) {
+      return <LoadingState title="Loading notes…" description="Fetching your notes." />;
+    }
+
+    if (initialError) {
+      return (
+        <EmptyState
+          title="Couldn’t load notes"
+          description="Please refresh the page. Your local notes should still be available offline."
+          actionLabel="Try again"
+          onAction={() => {
+            // non-blocking retry
+            (async () => {
+              setInitialLoading(true);
+              setInitialError("");
+              try {
+                await refresh("");
+              } catch (e) {
+                const msg = e?.message || "Unknown error";
+                setInitialError(msg);
+                pushToast({ kind: "error", title: "Load failed", message: msg });
+              } finally {
+                setInitialLoading(false);
+              }
+            })();
+          }}
+        />
+      );
+    }
+
+    if (busy) {
+      // Operation-level loading state: keep it subtle but clear.
+      return <LoadingState title="Working…" description="Saving changes." />;
+    }
+
+    if (showEmptyList) {
+      return (
+        <EmptyState
+          title={search.trim() ? "No matches" : "No notes yet"}
+          description={
+            search.trim()
+              ? "Try a different search term."
+              : "Create your first note to get started. A sample note is included on first run."
+          }
+          actionLabel="Create a note"
+          onAction={handleNewNote}
+        />
+      );
+    }
+
+    return (
+      <NotesList
+        notes={visibleNotes}
+        selectedId={selectedId}
+        onSelect={(id) => handleSelect(id, { focusEditor: true })}
+        onToggleFavorite={handleToggleFavorite}
+        onDelete={handleDelete}
+      />
+    );
+  })();
+
+  const editorPanel = (() => {
+    if (initialLoading) {
+      return <LoadingState title="Loading editor…" description="Preparing your workspace." />;
+    }
+
+    if (busy && selectedNote) {
+      // Keep editor visible but still indicate busy by disabling Save in editor; list shows spinner already.
+      // We'll just render the editor normally; NoteEditor already disables Save via savingDisabled.
+    }
+
+    if (selectedNote) {
+      return (
+        <NoteEditor
+          note={selectedNote}
+          onChangeDraft={handleChangeDraft}
+          onSave={handleSave}
+          onCancelNew={() => {
+            setIsNewDraft(false);
+            const fallbackId = notes[0]?.id || "";
+            setSelectedId(fallbackId);
+            setDraft(notes.find((n) => n.id === fallbackId) || null);
+
+            // Put focus back into the editor for the selected note.
+            window.setTimeout(() => editorTitleFocusRef.current?.focus?.(), 0);
+          }}
+          savingDisabled={savingDisabled}
+          isNew={isNewDraft}
+          titleInputRef={editorTitleFocusRef}
+          isBusy={busy}
+        />
+      );
+    }
+
+    return (
+      <EmptyState
+        title="Select a note"
+        description="Choose a note from the list to view or edit it."
+        actionLabel="Create a note"
+        onAction={handleNewNote}
+      />
+    );
+  })();
 
   return (
     <div className="App">
@@ -205,57 +368,17 @@ function App() {
           stats={stats}
         />
 
-        <main className="main">
+        <main className="main" aria-label="Notes workspace">
           <TopBar onNewNote={handleNewNote} activeSection={activeSection} apiEnabled={apiEnabled} />
-          <SearchBar value={search} onChange={setSearch} />
+          <SearchBar value={search} onChange={setSearch} disabled={initialLoading || Boolean(initialError)} />
 
           <div className="contentGrid">
-            <div className={["panel"].join(" ")}>
-              {showEmptyList ? (
-                <EmptyState
-                  title={search.trim() ? "No matches" : "No notes yet"}
-                  description={
-                    search.trim()
-                      ? "Try a different search term."
-                      : "Create your first note to get started. A sample note is included on first run."
-                  }
-                  actionLabel="Create a note"
-                  onAction={handleNewNote}
-                />
-              ) : (
-                <NotesList
-                  notes={visibleNotes}
-                  selectedId={selectedId}
-                  onSelect={handleSelect}
-                  onToggleFavorite={handleToggleFavorite}
-                  onDelete={handleDelete}
-                />
-              )}
+            <div className={["panel"].join(" ")} aria-label="Notes list panel">
+              {listPanel}
             </div>
 
-            <div className="editorPanel">
-              {selectedNote ? (
-                <NoteEditor
-                  note={selectedNote}
-                  onChangeDraft={handleChangeDraft}
-                  onSave={handleSave}
-                  onCancelNew={() => {
-                    setIsNewDraft(false);
-                    const fallbackId = notes[0]?.id || "";
-                    setSelectedId(fallbackId);
-                    setDraft(notes.find((n) => n.id === fallbackId) || null);
-                  }}
-                  savingDisabled={savingDisabled}
-                  isNew={isNewDraft}
-                />
-              ) : (
-                <EmptyState
-                  title="Select a note"
-                  description="Choose a note from the list to view or edit it."
-                  actionLabel="Create a note"
-                  onAction={handleNewNote}
-                />
-              )}
+            <div className="editorPanel" aria-label="Editor panel">
+              {editorPanel}
             </div>
           </div>
         </main>

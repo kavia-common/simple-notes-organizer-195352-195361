@@ -6,10 +6,23 @@ import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
 
 // PUBLIC_INTERFACE
-export function NoteEditor({ note, onChangeDraft, onSave, onCancelNew, savingDisabled, isNew }) {
+export function NoteEditor({
+  note,
+  onChangeDraft,
+  onSave,
+  onCancelNew,
+  savingDisabled,
+  isNew,
+  titleInputRef = null,
+  isBusy = false,
+}) {
   /**
    * Editor panel for the selected note or new note draft.
    * Controlled via parent draft state.
+   *
+   * Accessibility:
+   * - The title input can receive focus via `titleInputRef` for better keyboard UX.
+   * - Uses aria-busy on the editor container when operations are running.
    */
   const [touched, setTouched] = useState(false);
 
@@ -25,8 +38,11 @@ export function NoteEditor({ note, onChangeDraft, onSave, onCancelNew, savingDis
 
   if (!note) return null;
 
+  const saveHelpId = "save-help-text";
+  const titleErrorId = "title-error-text";
+
   return (
-    <div className={styles.container}>
+    <div className={styles.container} aria-busy={isBusy ? "true" : "false"}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
           <div className={styles.headerTitle}>{isNew ? "New note" : "Edit note"}</div>
@@ -37,7 +53,7 @@ export function NoteEditor({ note, onChangeDraft, onSave, onCancelNew, savingDis
         </div>
         <div className={styles.headerRight}>
           {isNew ? (
-            <Button variant="ghost" onClick={onCancelNew}>
+            <Button variant="ghost" onClick={onCancelNew} aria-label="Cancel new note">
               Cancel
             </Button>
           ) : null}
@@ -48,24 +64,36 @@ export function NoteEditor({ note, onChangeDraft, onSave, onCancelNew, savingDis
               onSave();
             }}
             disabled={savingDisabled}
-            aria-label="Save note"
+            aria-label={savingDisabled ? "Save note (disabled)" : "Save note"}
+            aria-describedby={saveHelpId}
           >
             Save
           </Button>
         </div>
       </div>
 
-      <div className={styles.form}>
+      <div className={styles.form} role="form" aria-label="Note editor form">
+        <div id={saveHelpId} className={styles.srOnly}>
+          Saving requires a title.
+        </div>
+
         <label className={styles.label}>
           <div className={styles.labelText}>Title</div>
           <Input
+            ref={titleInputRef}
             value={note.title}
             onChange={(e) => onChangeDraft({ title: e.target.value })}
             onBlur={() => setTouched(true)}
             placeholder="Untitled note"
             aria-label="Note title"
+            aria-invalid={titleError ? "true" : "false"}
+            aria-describedby={titleError ? titleErrorId : undefined}
           />
-          {titleError ? <div className={styles.error} role="alert">{titleError}</div> : null}
+          {titleError ? (
+            <div className={styles.error} role="alert" id={titleErrorId}>
+              {titleError}
+            </div>
+          ) : null}
         </label>
 
         <label className={styles.label}>
