@@ -1,0 +1,116 @@
+.sidebar {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(17, 24, 39, 0.08);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.logoMark {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(245, 158, 11, 0.9));
+  color: white;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow-md);
+}
+
+.brandTitle {
+  font-weight: 850;
+  color: var(--color-text);
+  letter-spacing: 0.2px;
+}
+
+.brandSub {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.65);
+  margin-top: 2px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.navItem {
+  width: 100%;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+  color: var(--color-text);
+  font-weight: 650;
+}
+
+.navItem:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+.navItem:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 2px;
+}
+
+.active {
+  border-color: rgba(37, 99, 235, 0.38);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.09);
+}
+
+.count {
+  margin-left: 10px;
+}
+
+.sectionTitle {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 750;
+  color: rgba(17, 24, 39, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.futureList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.futureItem {
+  font-size: 13px;
+  color: rgba(17, 24, 39, 0.6);
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(17, 24, 39, 0.03);
+  border: 1px dashed rgba(17, 24, 39, 0.12);
+}
+
+.footer {
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+  padding-top: 12px;
+}
+
+.footerHint {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.6);
+}

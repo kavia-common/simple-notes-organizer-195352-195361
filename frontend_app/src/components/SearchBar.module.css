@@ -1,0 +1,16 @@
+.container {
+  position: relative;
+  padding: 0 18px 14px 18px;
+}
+
+.icon {
+  position: absolute;
+  left: 28px;
+  top: 10px;
+  font-size: 14px;
+  color: rgba(17, 24, 39, 0.45);
+}
+
+.input {
+  padding-left: 34px;
+}

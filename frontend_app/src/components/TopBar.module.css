@@ -1,0 +1,41 @@
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 18px 12px 18px;
+}
+
+.left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 850;
+  color: var(--color-text);
+  letter-spacing: 0.2px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: rgba(17, 24, 39, 0.62);
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mode {
+  display: none;
+}
+
+@media (min-width: 920px) {
+  .mode {
+    display: inline-flex;
+  }
+}

@@ -1,13 +1,41 @@
+:root {
+  --color-primary: #2563eb;
+  --color-secondary: #f59e0b;
+  --color-success: #f59e0b;
+  --color-error: #ef4444;
+  --color-bg: #f9fafb;
+  --color-surface: #ffffff;
+  --color-text: #111827;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+
+  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06), 0 1px 1px rgba(17, 24, 39, 0.04);
+  --shadow-md: 0 10px 20px rgba(17, 24, 39, 0.08), 0 2px 6px rgba(17, 24, 39, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue",
+    Arial, "Noto Sans", "Liberation Sans", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color: var(--color-text);
+  background: radial-gradient(900px 500px at 10% 10%, rgba(37, 99, 235, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 90% 30%, rgba(245, 158, 11, 0.08), transparent 55%),
+    linear-gradient(180deg, rgba(37, 99, 235, 0.06) 0%, rgba(249, 250, 251, 1) 42%, rgba(249, 250, 251, 1) 100%);
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
